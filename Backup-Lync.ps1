@@ -5,7 +5,7 @@ A backup script for Lync that uses GIT (via libgit2) to save the data, provide d
 
 .DESCRIPTION
 
-Version 1.0.0 released 2015-02-18
+Version 1.0.1 released 2015-04-15
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
@@ -73,9 +73,14 @@ param(
 $start = [DateTime]::UtcNow
 $thisScriptPath = [io.path]::GetDirectoryName($MyInvocation.MyCommand.Path)
 
+if(!$From) {
+	$fqdn = [System.Net.Dns]::GetHostByName($env:computerName).HostName
+	$From = $env:USERNAME + "@" + $fqdn
+}
+
 [reflection.assembly]::LoadWithPartialName("windowsbase") | out-null # for system.io.packaging
 
-if($Commit -and !$(ls $thisScriptPath\libgit2sharp.dll)) {
+if($Commit -and !$(ls $thisScriptPath\libgit2sharp.dll -ErrorAction SilentlyContinue)) {
 	Write-Verbose "Commit requested but libgit2sharp.dll not found; downloading..."
 
 	$wc = new-object System.Net.WebClient
@@ -102,7 +107,7 @@ if($Commit -and !$(ls $thisScriptPath\libgit2sharp.dll)) {
 	$git2Dll = $dll.Uri.ToString() -split '/' | select -last 1
 	$file = new-object System.IO.FileStream $(Join-Path $thisScriptPath $git2Dll), "Create"
 	$dll.GetStream().CopyTo($file)
-	$file.Close
+	$file.Close()
 }
 
 if($EmailArchiveTo -and (!$From -or !$SmtpServer)) {
@@ -342,10 +347,12 @@ if($Commit) {
 
 	$git = new-object LibGit2Sharp.Repository "$bakPath\.git"
 	$dirty = $false
-	$git.Index.RetrieveStatus() | foreach {
+	$statusOpts = new-object LibGit2Sharp.StatusOptions
+	$stageOpts = new-object LibGit2Sharp.StageOptions
+	$git.RetrieveStatus($statusOpts) | foreach {
 		if($_.State -eq "Untracked" -or $_.State -eq "Missing" -or $_.State -eq "Modified") {
 			Write-Verbose "Staging $($_.FilePath)"
-			$git.Index.Stage($_.FilePath)
+			$git.Stage($_.FilePath, $stageOpts)
 			$dirty = $true
 		} else {
 			Write-Verbose "Skipping $($_.FilePath) [$($_.State)]"
@@ -386,7 +393,8 @@ if($Commit) {
 		} else {
 			$msg = "Backup run @ {0:yyyy-MM-dd HH:mm} UTC" -f $start
 		}
-		$git.Commit($msg, $sig, $sig) | out-null
+		$commitOpts = new-object LibGit2Sharp.CommitOptions
+		$git.Commit($msg, $sig, $sig, $commitOpts) | out-null
 	}
 	
 	# TODO: add option to push to remote (eg origin)
