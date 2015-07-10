@@ -5,7 +5,7 @@ A backup script for Lync that uses GIT (via libgit2) to save the data, provide d
 
 .DESCRIPTION
 
-Version 1.1.0 released 2015-06-19
+Version 1.1.1 released 2015-06-19
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
@@ -149,6 +149,7 @@ if($IncludeConfig) {
 
 	$ExcludedCommands = @('Get-CsEffectivePolicy', 'Get-CsRgsConfiguration', 'Get-CsWatcherNodeConfiguration')
 	$cmds = @("Get-CsDialPlan","Get-CsVoiceRoute","Get-CsPstnUsage","Get-CsDialInConferencingAccessNumber","Get-CsExUmContact")
+	$cmds += @("Get-CsHostingProvider","Get-CsAllowedDomain","Get-CsBlockedDomain")
 	$cmds += Get-Command Get-Cs*Configuration,Get-Cs*Policy -Module Lync | %{ $_.Name } | ?{ $ExcludedCommands -notcontains $_ } 
 
 	$cmds | foreach {
