@@ -9,6 +9,10 @@ Version 1.1.1 released 2015-06-19
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
+.PARAMETER Path
+
+path to the folder where the backup data will be stored
+
 .PARAMETER IncludeConfig 
 
 switch to include configuration in backup (default true)
@@ -48,6 +52,18 @@ email address that the email sent by EmailArchiveTo and EmailChangesTo will be s
 .PARAMETER SmtpServer
 
 FQDN of the SMTP server that the email sent by EmailArchiveTo and EmailChangesTo will be sent using
+
+.PARAMETER RemoteName
+
+local remote name for the remote GIT repository (defaults to origin)
+
+.PARAMETER RemoteRepoUrl
+
+URL of the remote GIT repository to push changes to
+
+.PARAMETER RemoteCredential
+
+credentials to use to authenticate to the remote GIT repository
 
 .EXAMPLE
 
