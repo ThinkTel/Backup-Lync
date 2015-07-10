@@ -5,7 +5,7 @@ A backup script for Lync that uses GIT (via libgit2) to save the data, provide d
 
 .DESCRIPTION
 
-Version 1.2.0 released 2015-07-09
+Version 1.2.1 released 2015-07-09
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
@@ -512,29 +512,29 @@ if($Commit) {
 		}
 	}
 	if($dirty) {
-		Write-Verbose "Recording changes..."
-		$diffPath = join-path $Path "changes"
-		if(-not $(Test-Path $diffPath)) {
-			mkdir $diffPath | out-null
-		}
-		
-		$diffFile = "$diffPath\{0:yyyy-MM-dd_HHmm}.txt" -f $start
-		$compare = $git.diff.gettype().getmethod("Compare", [type[]]@([LibGit2Sharp.Tree], [LibGit2Sharp.DiffTargets], [System.Collections.Generic.IEnumerable[string]], [LibGit2Sharp.ExplicitPathsOptions], [LibGit2Sharp.CompareOptions]))
-		$compareTree = $compare.MakeGenericMethod([libgit2sharp.patch])
-		# $co = new-object libgit2sharp.compareoptions
-		# $co.ContextLines = 0
-		$diff = $compareTree.Invoke($git.Diff, @($git.Head.Tip.Tree, [libgit2sharp.difftargets]::Index, $null, $null, $null))
-		$diff | foreach { 
-			if($_.Status -eq "Added") {
-				"diff added " + $($_.Path -Replace '\\','/') + "`r`n"
-			} elseif($_.Status -eq "Removed") {
-				"diff removed " + $($_.OldPath -Replace '\\','/') + "`r`n"
-			} else {
-				$_.Patch -Replace "`r?`n","`r`n"
-			}
-		} | Out-File $diffFile -encoding ascii
-
 		if($EmailChangesTo) {
+			Write-Verbose "Recording changes..."
+			$diffPath = join-path $Path "changes"
+			if(-not $(Test-Path $diffPath)) {
+				mkdir $diffPath | out-null
+			}
+			
+			$diffFile = "$diffPath\{0:yyyy-MM-dd_HHmm}.txt" -f $start
+			$compare = $git.diff.gettype().getmethod("Compare", [type[]]@([LibGit2Sharp.Tree], [LibGit2Sharp.DiffTargets], [System.Collections.Generic.IEnumerable[string]], [LibGit2Sharp.ExplicitPathsOptions], [LibGit2Sharp.CompareOptions]))
+			$compareTree = $compare.MakeGenericMethod([libgit2sharp.patch])
+			# $co = new-object libgit2sharp.compareoptions
+			# $co.ContextLines = 0
+			$diff = $compareTree.Invoke($git.Diff, @($git.Head.Tip.Tree, [libgit2sharp.difftargets]::Index, $null, $null, $null))
+			$diff | foreach { 
+				if($_.Status -eq "Added") {
+					"diff added " + $($_.Path -Replace '\\','/') + "`r`n"
+				} elseif($_.Status -eq "Removed") {
+					"diff removed " + $($_.OldPath -Replace '\\','/') + "`r`n"
+				} else {
+					$_.Patch -Replace "`r?`n","`r`n"
+				}
+			} | Out-File $diffFile -encoding ascii
+
 			Write-Verbose "Emailing changes $diffFile to $EmailChangesTo"
 			Email $EmailChangesTo "Lync config changes for {0} ({1:yyyy-MMM-dd HH:mm})" $diffFile $([System.Net.Mime.MediaTypeNames+Text]::Plain)
 		}
