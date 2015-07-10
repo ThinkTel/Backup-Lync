@@ -5,7 +5,7 @@ A backup script for Lync that uses GIT (via libgit2) to save the data, provide d
 
 .DESCRIPTION
 
-Version 1.0.1 released 2015-04-15
+Version 1.1.0 released 2015-06-19
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
@@ -67,7 +67,10 @@ param(
 	[Parameter()][string]$EmailArchiveTo,
 	[Parameter()][string]$EmailChangesTo,
 	[Parameter()][string]$From,
-	[Parameter()][string]$SmtpServer
+	[Parameter()][string]$SmtpServer,
+	[Parameter()][string]$RemoteName = "origin",
+	[Parameter()][string]$RemoteRepoUrl,
+	[Parameter()][System.Management.Automation.PSCredential]$RemoteCredential
 )
 
 $start = [DateTime]::UtcNow
@@ -397,11 +400,38 @@ if($Commit) {
 		$git.Commit($msg, $sig, $sig, $commitOpts) | out-null
 	}
 	
-	# TODO: add option to push to remote (eg origin)
-	# $pushResult = $git.Network.Push($git.Remotes["origin"], "HEAD", "refs/heads/destination_branch");
-	# if ($pushResult.HasErrors)
-	# {
-		# $errMsg = $(pushResult.FailedPushUpdates | %{ "`t{0} : {1}" -f $_.Reference,$_.Message }) -join "`r`n"
-		# Write-Error "Errors while pushing commit:`r`n$errMsg"
-	# }
+	if($RemoteName -and $RemoteRepoUrl) {
+		# get the remote
+		$remote = $git.Network.Remotes[$RemoteName]
+		
+		# if there's a remote check that it points to the right repo url
+		if($remote -and $remote.Url -ne $RemoteRepoUrl) {
+			# if not then remove since we will recreate the remote
+			$git.Network.Remotes.Remove($RemoteName)
+			$remote = $null
+		}
+		
+		# if there's no remote create it it
+		if(!$remote) {
+			$remote = $git.Network.Remotes.Add($RemoteName, $RemoteRepoUrl)
+			$git.Branches.Update($git.Head, {param($b) $b.Remote = $remote.Name; $b.UpstreamBranch = $git.Head.CanonicalName})
+		}
+
+		## only push if we haven't pushed yet or master is ahead of the remote
+		if(-not $git.Branches["$RemoteName/master"] -or $git.Branches["master"].Tip.Id.Sha -ne $git.Branches["$RemoteName/master"].Tip.Id.Sha) {
+			Write-Verbose "Pushing to $RemoteName ($RemoteRepoUrl)"
+			$pushOptions = new-object LibGit2Sharp.PushOptions
+			if($RemoteCredential) {
+				$credHandler = {
+					param($url,$usernameFromUrl,$types) 
+					$cred = new-object LibGit2Sharp.UsernamePasswordCredentials
+					$cred.Username = $RemoteCredential.Username
+					$cred.Password = $RemoteCredential.GetNetworkCredential().Password
+					return $cred
+				}
+				$pushOptions.CredentialsProvider = ($credHandler -as [LibGit2Sharp.Handlers.CredentialsHandler])
+			}
+			[LibGit2Sharp.NetworkExtensions]::Push($git.Network, $git.Branches["master"], $pushOptions)
+		}
+	}
 }
