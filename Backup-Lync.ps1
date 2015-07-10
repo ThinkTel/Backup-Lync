@@ -151,6 +151,7 @@ if($IncludeConfig) {
 	$cmds = @("Get-CsDialPlan","Get-CsVoiceRoute","Get-CsPstnUsage","Get-CsDialInConferencingAccessNumber","Get-CsExUmContact")
 	$cmds += @("Get-CsHostingProvider","Get-CsAllowedDomain","Get-CsBlockedDomain")
 	$cmds += Get-Command Get-Cs*Configuration,Get-Cs*Policy -Module Lync | %{ $_.Name } | ?{ $ExcludedCommands -notcontains $_ } 
+	$cmds += Get-Command Get-Cs*Configuration,Get-Cs*Policy -Module SkypeForBusiness | %{ $_.Name } | ?{ $ExcludedCommands -notcontains $_ } 
 
 	$cmds | foreach {
 		$type = $_.Substring(6) 
@@ -217,7 +218,7 @@ if($IncludeUsers) {
 	$settings.OmitXmlDeclaration = $false;
 
 	# in case there's a mixed environment
-	$supportedPools = Get-CsService -UserServer | ?{ $_.Version -eq 6 } | %{ $_.PoolFqdn } | sort -Unique 
+	$supportedPools = Get-CsService -UserServer | ?{ $_.Version -ge 6 } | %{ $_.PoolFqdn } | sort -Unique 
 
 	$users = Get-CsUser | sort SipAddress
 	foreach($u in $users) {
