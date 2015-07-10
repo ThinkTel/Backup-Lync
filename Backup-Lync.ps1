@@ -415,7 +415,7 @@ if($Commit) {
 		# if there's no remote create it it
 		if(!$remote) {
 			$remote = $git.Network.Remotes.Add($RemoteName, $RemoteRepoUrl)
-			$git.Branches.Update($git.Head, {param($b) $b.Remote = $remote.Name; $b.UpstreamBranch = $git.Head.CanonicalName})
+			$git.Branches.Update($git.Head, {param($b) $b.Remote = $remote.Name; $b.UpstreamBranch = $git.Head.CanonicalName}) | Out-Null
 		}
 
 		## only push if we haven't pushed yet or master is ahead of the remote
