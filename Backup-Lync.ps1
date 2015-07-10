@@ -5,7 +5,7 @@ A backup script for Lync that uses GIT (via libgit2) to save the data, provide d
 
 .DESCRIPTION
 
-Version 1.1.1 released 2015-06-19
+Version 1.2.0 released 2015-07-09
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
@@ -65,32 +65,164 @@ URL of the remote GIT repository to push changes to
 
 credentials to use to authenticate to the remote GIT repository
 
+.PARAMETER SaveConfig
+
+switch to save the parameters to ConfigFile and exit instead of running
+
+.PARAMETER LoadConfig
+
+switch to load config from ConfigFile instead of using parameters
+
+.PARAMETER ConfigFile
+
+path to XML configuration file to be written to (with SaveConfig) or read from (with LoadConfig)
+
 .EXAMPLE
 
-Backup Lync configuration, commit changes and email a diff (similar to RANCID)
+Backup-Lync.ps1
+
+The default is to read the default configuration file (.\config.xml) and perform a backup of Lync/Skype for Business
+
+.EXAMPLE
+
+Write all parameters to the default configuration file (.\config.xml). A specific config file can be set using -ConfigFile path\to\config\file.xml
+
+Backup-Lync.ps1 -IncludeConfig -Commit -EmailChangesTo my.email@domain.com -From lyncbackup@domain.com -SmtpServer smtp.domain.com -SaveConfig
+
+.EXAMPLE
 
 Backup-Lync.ps1 -IncludeConfig -Commit -EmailChangesTo my.email@domain.com -From lyncbackup@domain.com -SmtpServer smtp.domain.com
+
+Skip the configuration file and immediately perform a backup of Lync/Skype for Business configuration, committing changes and emailing a diff (similar to RANCID)
+
 #>
-[CmdletBinding(SupportsShouldProcess=$true)]
+[CmdletBinding(SupportsShouldProcess=$true, DefaultParameterSetName = "cfg")]
 param(
-	[Parameter(Position=0)][string]$Path = ".\data",
-	[Parameter()][switch]$IncludeConfig = $true,
-	[Parameter()][switch]$IncludeUsers = $false,
-	[Parameter()][switch]$IncludeRgs = $false,
-	[Parameter()][switch]$Archive = $true,
-	[Parameter()][switch]$Commit = $true,
-	[Parameter()][string]$CommitMessage,
-	[Parameter()][string]$EmailArchiveTo,
-	[Parameter()][string]$EmailChangesTo,
-	[Parameter()][string]$From,
-	[Parameter()][string]$SmtpServer,
-	[Parameter()][string]$RemoteName = "origin",
-	[Parameter()][string]$RemoteRepoUrl,
-	[Parameter()][System.Management.Automation.PSCredential]$RemoteCredential
+	[Parameter(Position=0, ParameterSetName = "cli")][string]$Path = ".\data",
+	[Parameter(ParameterSetName = "cli")][switch]$IncludeConfig = $true,
+	[Parameter(ParameterSetName = "cli")][switch]$IncludeUsers = $false,
+	[Parameter(ParameterSetName = "cli")][switch]$IncludeRgs = $false,
+	[Parameter(ParameterSetName = "cli")][switch]$Archive = $true,
+	[Parameter(ParameterSetName = "cli")][switch]$Commit = $true,
+	[Parameter(ParameterSetName = "cli")][string]$CommitMessage,
+	[Parameter(ParameterSetName = "cli")][string]$EmailArchiveTo,
+	[Parameter(ParameterSetName = "cli")][string]$EmailChangesTo,
+	[Parameter(ParameterSetName = "cli")][string]$From,
+	[Parameter(ParameterSetName = "cli")][string]$SmtpServer,
+	[Parameter(ParameterSetName = "cli")][string]$RemoteName = "origin",
+	[Parameter(ParameterSetName = "cli")][string]$RemoteRepoUrl,
+	[Parameter(ParameterSetName = "cli")][System.Management.Automation.PSCredential]$RemoteCredential,
+	[Parameter(ParameterSetName = "cli")][switch]$SaveConfig,
+	[Parameter(ParameterSetName = "cfg")][switch]$LoadConfig = $true,
+	[Parameter()][string]$ConfigFile = ".\config.xml"
 )
 
-$start = [DateTime]::UtcNow
 $thisScriptPath = [io.path]::GetDirectoryName($MyInvocation.MyCommand.Path)
+
+if($ConfigFile.StartsWith(".")) {
+	$ConfigFile = join-path $thisScriptPath $ConfigFile.Substring(2)
+}
+
+if($pscmdlet.ParameterSetName -eq "cli" -and $SaveConfig) {
+	# write the config then exit
+	$cfg = [xml]"<config/>"
+	$nCfg = $cfg.GetElementsByTagName("config")
+	$nCfg.SetAttribute("path", $Path)
+	
+	$nInclude = $cfg.CreateElement("include");
+	$nInclude.SetAttribute("config", $IncludeConfig)
+	$nInclude.SetAttribute("users", $IncludeUsers)
+	$nInclude.SetAttribute("rgs", $IncludeRgs)
+	$nCfg.AppendChild($nInclude) | Out-Null
+	
+	$nArchive = $cfg.CreateElement("archive")
+	$nArchive.SetAttribute("enabled", $Archive)
+	$nCfg.AppendChild($nArchive) | Out-Null
+	if($EmailArchiveTo) {
+		$nEmail = $cfg.CreateElement("email")
+		$nEmail.AppendChild($cfg.CreateTextNode($EmailArchiveTo)) | Out-Null
+		$nArchive.AppendChild($nEmail) | Out-Null
+	}
+	
+	$nCommit = $cfg.CreateElement("commit")
+	$nCommit.SetAttribute("enabled", $Commit)
+	$nCfg.AppendChild($nCommit) | Out-Null
+	if($CommitMessage) {
+		$nMsg = $cfg.CreateElement("message")
+		$nMsg.AppendChild($cfg.CreateTextNode($CommitMessage)) | Out-Null
+		$nCommit.AppendChild($nMsg) | Out-Null
+	}
+	if($EmailChangesTo) {
+		$nEmail = $cfg.CreateElement("email")
+		$nEmail.AppendChild($cfg.CreateTextNode($EmailChangesTo)) | Out-Null
+		$nCommit.AppendChild($nEmail) | Out-Null
+	}
+	if($RemoteName -or $RemoteRepoUrl -or $RemoteCredential) {
+		$nRemote = $cfg.CreateElement("remote")
+		if($RemoteName) {
+			$nRemote.SetAttribute("name", $RemoteName)
+		}
+		if($RemoteRepoUrl) {
+			$nRemote.SetAttribute("href", $RemoteRepoUrl)
+		}
+		if($RemoteCredential) {
+			$nRmtUsername = $cfg.CreateElement("username")
+			$nRmtUsername.AppendChild($cfg.CreateTextNode($RemoteCredential.Username)) | Out-Null
+			$nRemote.AppendChild($nRmtUsername) | Out-Null
+			$nRmtPassword = $cfg.CreateElement("password")
+			# encrypts password uring Data Protection API
+			$pwd = $RemoteCredential.Password | ConvertFrom-SecureString
+			$nRmtPassword.AppendChild($cfg.CreateTextNode($pwd)) | Out-Null
+			$nRemote.AppendChild($nRmtPassword) | Out-Null
+		}
+		$nCommit.AppendChild($nRemote) | Out-Null
+	}
+	
+	if($SmtpServer -or $From) {
+		$nSmtp = $cfg.CreateElement("smtp")
+		if($SmtpServer) {
+			$nSmtp.SetAttribute("server", $SmtpServer)
+		}
+		if($From) {
+			$nSmtp.SetAttribute("from", $From)
+		}
+		$nCfg.AppendChild($nSmtp) | Out-Null
+	}
+	
+	$cfg.Save($ConfigFile)
+	exit
+}
+
+if($pscmdlet.ParameterSetName -eq "cfg") {
+	# check if the file exists
+	if(!$(Test-Path $ConfigFile)) {
+		Write-Error "$ConfigFile doesn't exist. Please create a config file with -SaveConfig and try running again, or specify a configuration using the command line parameters or with -LoadConfig"
+		exit
+	}
+	
+	# load the config 
+	[xml]$cfg = gc $ConfigFile -Raw -Encoding ASCII
+	[string]$Path = $cfg.config.path
+	[bool]$IncludeConfig = $($cfg.config.include.config -eq "True")
+	[bool]$IncludeUsers = $($cfg.config.include.users-eq "True")
+	[bool]$IncludeRgs = $($cfg.config.include.rgs -eq "True")
+	[bool]$Archive = $($cfg.config.archive.enabled -eq "True")
+	[string]$EmailArchiveTo = $cfg.config.archive.email
+	[bool]$Commit = $($cfg.config.commit.enabled -eq "True")
+	[string]$CommitMessage = $cfg.config.commit.message
+	[string]$EmailChangesTo = $cfg.config.commit.email
+	[string]$RemoteName = $cfg.config.commit.remote.name
+	[string]$RemoteRepoUrl = $cfg.config.commit.remote.href
+	if($cfg.config.commit.remote.username -and $cfg.config.commit.remote.password) {
+		$rmtUsername = $cfg.config.commit.remote.username
+		$rmtPassword = $cfg.config.commit.remote.password | ConvertTo-SecureString
+		$RemoteCredential = new-object System.Management.Automation.PSCredential $rmtUsername, $rmtPassword
+	}
+	[string]$SmtpServer = $cfg.config.smtp.server
+	[string]$From = $cfg.config.smtp.from
+}
+
+$start = [DateTime]::UtcNow
 
 if(!$From) {
 	$fqdn = [System.Net.Dns]::GetHostByName($env:computerName).HostName
