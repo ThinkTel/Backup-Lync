@@ -252,13 +252,20 @@ if($Commit -and !$(ls $thisScriptPath\libgit2sharp.dll -ErrorAction SilentlyCont
 	
 	$dll = $nupkg.GetPart("/lib/net40/LibGit2Sharp.dll")
 	$file = new-object System.IO.FileStream $(Join-Path $thisScriptPath "libgit2sharp.dll"), "Create"
-	$dll.GetStream().CopyTo($file)
+	$s = $dll.GetStream()
+	$s.CopyTo($file)
+	$s.Close()
+	$file.Close()
 	
 	$dll = $nupkg.getparts() | where { $_.Uri -match "amd64/git2-.*\.dll" }
 	$git2Dll = $dll.Uri.ToString() -split '/' | select -last 1
 	$file = new-object System.IO.FileStream $(Join-Path $thisScriptPath $git2Dll), "Create"
-	$dll.GetStream().CopyTo($file)
+	$s = $dll.GetStream()
+	$s.CopyTo($file)
+	$s.Close()
 	$file.Close()
+	
+	$nupkg.Close()
 }
 
 if($EmailArchiveTo -and (!$From -or !$SmtpServer)) {
@@ -385,6 +392,7 @@ if($IncludeUsers) {
 			# this indents the file nicely so that we have better diffs
 			[system.xml.linq.xdocument]::Load($zip).ToString() | Out-File "$bakPath\userdata\$($sip).xml" -encoding ascii
 			
+			$zip.Close()
 			$pkg.Close()
 			rm $tempZip
 		}
@@ -470,9 +478,11 @@ if($Archive) {
 		$item = $item -replace ' ','_' -replace '#',''
 		try {
 			$part = $zip.CreatePart($item, "text/xml", $compression)
+			$s = $part.GetStream()
 			$file = new-object system.io.filestream $_.FullName, $([system.io.filemode]::open), $([system.io.fileaccess]::Read)
-			$file.CopyTo($part.GetStream())
+			$file.CopyTo($s)
 			$file.Close()
+			$s.Close()
 		} catch {
 			Write-Error "Failed to create part $item; $_"
 		}
