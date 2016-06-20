@@ -302,7 +302,7 @@ if($IncludeConfig) {
 	}
 	mkdir $bakPath\config | Out-Null
 
-	$ExcludedCommands = @('Get-CsEffectivePolicy', 'Get-CsRgsConfiguration', 'Get-CsWatcherNodeConfiguration')
+	$ExcludedCommands = @('Get-CsEffectivePolicy', 'Get-CsRgsConfiguration', 'Get-CsSlaConfiguration', 'Get-CsWatcherNodeConfiguration')
 	$cmds = @("Get-CsDialPlan","Get-CsVoiceRoute","Get-CsPstnUsage","Get-CsDialInConferencingAccessNumber","Get-CsExUmContact")
 	$cmds += @("Get-CsHostingProvider","Get-CsAllowedDomain","Get-CsBlockedDomain")
 	$cmds += Get-Command Get-Cs*Configuration,Get-Cs*Policy -Module Lync | %{ $_.Name } | ?{ $ExcludedCommands -notcontains $_ } 
