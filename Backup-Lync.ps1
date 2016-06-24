@@ -5,7 +5,7 @@ A backup script for Lync that uses GIT (via libgit2) to save the data, provide d
 
 .DESCRIPTION
 
-Version 1.2.1 released 2015-07-09
+Version 1.2.2 released 2016-06-20
 
 If you specify Commit, libgit2 is used to interact with GIT. It is used via libgit2sharp and if either of these dlls are not in the same directly as the script, they will be downloaded from NuGet.
 
